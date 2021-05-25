@@ -1,0 +1,23 @@
+{
+  "name": "cognito-example",
+  "version": "1.0.0",
+  "description": "Amazon Cognito example app",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quickguard-oss/cognito-example.git"
+  },
+  "author": "Quick Guard, Inc.",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/quickguard-oss/cognito-example/issues"
+  },
+  "homepage": "https://github.com/quickguard-oss/cognito-example#readme",
+  "private": true,
+  "dependencies": {
+    "create-react-app": "^4.0.3"
+  }
+}
