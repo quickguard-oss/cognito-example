@@ -2,15 +2,17 @@
 //   * https://docs.amplify.aws/lib/auth/social/q/platform/js
 //   * https://docs.amplify.aws/lib/auth/mfa/q/platform/js
 
+import { ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import Amplify, { Auth, Hub } from 'aws-amplify';
 import QRCode from 'qrcode.react';
 import React, { useEffect, useState } from 'react';
 import awsConfig from './awsConfig';
 
-Amplify.configure(awsConfig);
+Amplify.configure(awsConfig.cognito);
 
 const App = () => {
   const [user, setUser] = useState(null);
+  const [credentials, setCredentials] = useState(null);
   const [qrCode, setQrCode] = useState(null);
 
   useEffect(() => {
@@ -19,9 +21,13 @@ const App = () => {
         case 'signIn':
         case 'cognitoHostedUI':
           try {
-            const userData = await Auth.currentAuthenticatedUser({ bypassCache: true });
+            setUser(
+              await Auth.currentAuthenticatedUser({ bypassCache: true })
+            );
 
-            setUser(userData);
+            setCredentials(
+              await Auth.currentCredentials()
+            );
           } catch (e) {
             console.log('Not signed in');
           }
@@ -29,6 +35,7 @@ const App = () => {
           break;
         case 'signOut':
           setUser(null);
+          setCredentials(null);
 
           break;
         case 'signIn_failure':
@@ -43,9 +50,7 @@ const App = () => {
   }, []);
 
   return (
-    <div style={{
-      textAlign: 'center'
-    }}>
+    <div>
       <p>
         User: {user ? user.attributes.email : 'None'}
       </p>
@@ -65,6 +70,10 @@ const App = () => {
         ) : (
           user.preferredMFA !== 'NOMFA' ? (
             <>
+              <S3ObjectList
+                credentials={credentials}
+              />
+
               <CancelMfaButton
                 user={user}
                 setUser={setUser}
@@ -74,6 +83,10 @@ const App = () => {
             </>
           ) : (
             <>
+              <S3ObjectList
+                credentials={credentials}
+              />
+
               <SetupTotpButton
                 user={user}
                 setQrCode={setQrCode}
@@ -94,15 +107,17 @@ const CancelMfaButton = (props) => {
   const handleClick = async () => {
     await Auth.setPreferredMFA(props.user, 'NOMFA');
 
-    const userData = await Auth.currentAuthenticatedUser({ bypassCache: true });
-
-    props.setUser(userData);
+    props.setUser(
+      await Auth.currentAuthenticatedUser({ bypassCache: true })
+    );
   };
 
   return (
-    <button onClick={() => {
-      handleClick();
-    }}>
+    <button
+      onClick={() => {
+        handleClick();
+      }}
+    >
       Cancel MFA
     </button>
   );
@@ -118,9 +133,11 @@ const SetupTotpButton = (props) => {
   };
 
   return (
-    <button onClick={() => {
-      setupTotp();
-    }}>
+    <button
+      onClick={() => {
+        setupTotp();
+      }}
+    >
       Setup TOTP
     </button>
   );
@@ -140,11 +157,70 @@ const SignOutButton = () => {
 
 const SignInButton = () => {
   return (
-    <button onClick={() => {
-      Auth.federatedSignIn();
-    }}>
+    <button
+      onClick={() => {
+        Auth.federatedSignIn();
+      }}
+    >
       Federated Sign In
     </button>
+  );
+};
+
+const S3ObjectList = (props) => {
+  const [objects, setObjects] = useState([]);
+
+  useEffect(() => {
+    const fetchObjectList = async () => {
+      const client = new S3Client({
+        region: awsConfig.s3.region,
+        credentials: props.credentials
+      });
+
+      const command = new ListObjectsV2Command({
+        Bucket: awsConfig.s3.bucket
+      });
+
+      const response = await client.send(command);
+
+      setObjects(
+        response.Contents.map((obj) => {
+          return obj.Key;
+        })
+      );
+    };
+
+    if (props.credentials) {
+      fetchObjectList();
+    }
+  }, [
+    props.credentials
+  ]);
+
+  return (
+    <>
+      <p>
+        Objects:
+      </p>
+
+      {props.credentials ? (
+        <ul>
+          {objects.map(obj => {
+            return (
+              <li
+                key={obj}
+              >
+                {obj}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p>
+          Not authorized...
+        </p>
+      )}
+    </>
   );
 };
 
@@ -159,9 +235,10 @@ const TotpSetupForm = (props) => {
 
       await Auth.setPreferredMFA(props.user, 'TOTP');
 
-      const userData = await Auth.currentAuthenticatedUser({ bypassCache: true });
+      props.setUser(
+        await Auth.currentAuthenticatedUser({ bypassCache: true })
+      );
 
-      props.setUser(userData);
       props.setQrCode(null);
     } catch (e) {
       console.log(e);
